@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { SimulationState, SimulationParams, ValveStates, ChartDataPoint, Notification, ReactorData } from '../types';
 
@@ -34,6 +33,7 @@ export const useSimulation = () => {
 
     const simulationIntervalRef = useRef<number | null>(null);
     const mixIntervalRef = useRef<number | null>(null);
+    const peakNotificationSentRef = useRef<boolean>(false);
     const paramsRef = useRef(params);
     useEffect(() => { paramsRef.current = params; }, [params]);
     const valvesRef = useRef(valves);
@@ -101,6 +101,7 @@ export const useSimulation = () => {
                 sugar: sugar3,
                 alcohol: alcohol3,
                 efficiency: conversionEfficiency,
+                temperature: currentParams.temperature,
             };
             const newChartData = [...prevState.chartData, newDataPoint];
             const finalChartData = newChartData.length > 30 ? newChartData.slice(1) : newChartData;
@@ -108,8 +109,9 @@ export const useSimulation = () => {
             if (fermentationProgress === 10) {
                 addNotification('Fermentación Iniciada', 'La levadura está activa, la producción de alcohol ha comenzado.', 'success');
             }
-            if (fermentationProgress === 30) {
-                addNotification('Pico de Fermentación', 'La fermentación primaria está en su punto máximo.', 'info');
+            if (conversionEfficiency >= 45 && !peakNotificationSentRef.current) {
+                addNotification('Pico de Actividad Alcanzado', `La eficiencia de conversión superó el ${conversionEfficiency.toFixed(0)}%. La levadura está en su fase más productiva.`, 'info');
+                peakNotificationSentRef.current = true;
             }
             
             if (fermentationProgress >= 60) {
@@ -147,6 +149,7 @@ export const useSimulation = () => {
     
     const startSimulation = () => {
         if (simulationState.isRunning) return;
+        peakNotificationSentRef.current = false;
         setSimulationState({
             ...INITIAL_STATE,
             isRunning: true,
@@ -181,6 +184,7 @@ export const useSimulation = () => {
         setValves({ valve12: true, valve23: true, valveRec: true });
         setSimulationState(INITIAL_STATE);
         setNotifications([]);
+        peakNotificationSentRef.current = false;
     };
     
     useEffect(() => {

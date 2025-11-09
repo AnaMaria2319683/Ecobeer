@@ -1,4 +1,3 @@
-
 export interface ReactorData {
     sugar: number;
     alcohol: number;
@@ -10,6 +9,7 @@ export interface ChartDataPoint {
     sugar: number;
     alcohol: number;
     efficiency: number;
+    temperature: number;
 }
 
 export interface SimulationState {
@@ -43,4 +43,9 @@ export interface Notification {
     title: string;
     message: string;
     type: 'success' | 'info';
+}
+
+export interface ReportDetailsProps {
+    simulationState: SimulationState;
+    params: SimulationParams;
 }

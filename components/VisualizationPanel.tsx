@@ -4,7 +4,8 @@ import type { SimulationState, SimulationParams } from '../types';
 import { Reactor } from './Reactor';
 import { IngredientPanel } from './IngredientPanel';
 import { Charts } from './Charts';
-import { ResultsPanel, ReportModal as ReportDetails } from './ReportModal';
+import { ResultsPanel } from './ResultsPanel';
+import { ReportModal as ReportDetails } from './ReportModal';
 
 interface VisualizationPanelProps {
     simulationState: SimulationState;

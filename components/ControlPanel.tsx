@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { SimulationParams, ValveStates } from '../types';
 
 interface ControlPanelProps {
@@ -42,13 +41,29 @@ const PanelSection: React.FC<{ title: string, icon: string, children: React.Reac
 );
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParam, valves, toggleValve, startSimulation, pauseSimulation, resetSimulation, setPreset, simulationState }) => {
+    const isIdealTemp = params.temperature >= 19 && params.temperature <= 21;
+    const maxRecirculation = isIdealTemp ? 70 : 40;
+
+    useEffect(() => {
+        if (params.recirculation > maxRecirculation) {
+            setParam('recirculation', maxRecirculation);
+        }
+    }, [params.temperature, maxRecirculation, params.recirculation, setParam]);
+
     return (
         <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-white/10 shadow-lg h-full flex flex-col">
             <PanelSection title="Parámetros del Proceso" icon="sliders-h">
                 <Slider label="Azúcar Inicial" value={params.sugar} min={50} max={500} unit=" g/L" onChange={(e) => setParam('sugar', parseInt(e.target.value))} />
                 <Slider label="Caudal de Mosto" value={params.flow} min={20} max={1000} unit=" L/h" onChange={(e) => setParam('flow', parseInt(e.target.value))} />
                 <Slider label="Temperatura" value={params.temperature} min={10} max={35} unit="°C" onChange={(e) => setParam('temperature', parseInt(e.target.value))} />
-                <Slider label="Tasa de Recirculación" value={params.recirculation} min={0} max={90} unit="%" onChange={(e) => setParam('recirculation', parseInt(e.target.value))} />
+                <Slider 
+                    label="Tasa de Recirculación" 
+                    value={params.recirculation} 
+                    min={0} 
+                    max={maxRecirculation} 
+                    unit="%" 
+                    onChange={(e) => setParam('recirculation', parseInt(e.target.value))} 
+                />
             </PanelSection>
 
             <PanelSection title="Controles del Proceso" icon="cogs">

@@ -1,9 +1,9 @@
+import React, { useState } from 'react';
+import type { SimulationState, SimulationParams, ReportDetailsProps } from '../types';
 
-import React from 'react';
-import type { SimulationState, SimulationParams } from '../types';
-
-// Dado que usamos un CDN, obtenemos Recharts de la ventana.
+// Dado que usamos un CDN, obtenemos Recharts y jsPDF de la ventana.
 declare const Recharts: any;
+declare const jspdf: any;
 
 // ======================================================================
 // 1. LÓGICA DE ANÁLISIS
@@ -70,11 +70,6 @@ const getAnalysis = (state: SimulationState, params: SimulationParams) => {
 // 2. COMPONENTES DE UTILIDAD
 // ======================================================================
 
-interface ReportDetailsProps {
-    simulationState: SimulationState;
-    params: SimulationParams;
-}
-
 const ReportSection: React.FC<{title: string, icon: string, children: React.ReactNode}> = ({title, icon, children}) => (
     <div className="bg-slate-700/50 p-4 rounded-lg">
         <h4 className="text-md font-semibold text-amber-400 mb-3 flex items-center gap-2">
@@ -99,86 +94,65 @@ const ChartContainer: React.FC<{ title: string, children: React.ReactNode }> = (
     </div>
 );
 
-const ResultMetric: React.FC<{ label: string; value: string; icon: string; color: string; feedback?: string }> = ({ label, value, icon, color, feedback }) => (
-    <div className="bg-slate-700/50 p-4 rounded-lg text-center flex-1 transition-all duration-300 hover:bg-slate-700 hover:shadow-lg hover:shadow-amber-500/10 hover:-translate-y-1 relative min-w-[200px]">
-        <i className={`fas ${icon} text-4xl mb-2 ${color}`}></i>
-        <div className="text-sm text-slate-400">{label}</div>
-        <div className="text-3xl font-bold text-white">{value}</div>
-        {feedback && (
-            <p className="mt-2 text-xs text-slate-300 italic h-8 flex items-center justify-center">{feedback.split('. ')[0] + '.'}</p> 
-        )}
-    </div>
+// ======================================================================
+// 3. MODAL DE REPORTE DETALLADO (ReportModal)
+// ======================================================================
+
+const TabButton: React.FC<{ active: boolean, onClick: () => void, children: React.ReactNode }> = ({ active, onClick, children }) => (
+    <button
+        onClick={onClick}
+        className={`px-3 py-2 text-xs sm:text-sm font-medium rounded-t-lg transition-colors focus:outline-none ${
+            active
+                ? 'bg-slate-700/50 text-amber-400 border-b-2 border-amber-400'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+        }`}
+    >
+        {children}
+    </button>
 );
 
-
-// ======================================================================
-// 3. PANEL DE RESULTADOS RÁPIDO (ResultsPanel)
-// ======================================================================
-
-export const ResultsPanel: React.FC<ReportDetailsProps> = ({ simulationState, params }) => {
-    const analysis = getAnalysis(simulationState, params);
-    const efficiency = ((params.sugar - simulationState.finalSugar) / params.sugar) * 100;
-
-    const summaryMessage = efficiency > 85
-        ? "¡Excelente! Máxima conversión lograda, perfil robusto."
-        : efficiency >= 75
-        ? "Buen rendimiento. Resultados sólidos y balanceados."
-        : "Fermentación incompleta. Revise las condiciones del proceso para mejorar.";
-
-    const getFeedback = (keyword: string, analysis: ReturnType<typeof getAnalysis>) => {
-        const good = analysis.good.find(item => item.toLowerCase().includes(keyword));
-        const bad = analysis.bad.find(item => item.toLowerCase().includes(keyword));
-        return good || bad;
-    }
+const CorrelationChart: React.FC<{
+    data: any[];
+    xKey: string;
+    yKey: string;
+    xLabel: string;
+    yLabel: string;
+    lineColor: string;
+}> = ({ data, xKey, yKey, xLabel, yLabel, lineColor }) => {
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = Recharts;
 
     return (
-        <div className="bg-slate-900/50 p-6 rounded-lg text-center border border-slate-700/50">
-            <h3 className="text-2xl font-bold text-green-400 mb-2">✅ ¡Fermentación Completada!</h3>
-            <p className="text-slate-300 mb-6 font-medium">{summaryMessage}</p>
-
-            <div className="flex flex-wrap justify-center gap-4 mb-6">
-                <ResultMetric
-                    label="ABV Estimado"
-                    value={`${simulationState.abv.toFixed(1)}%`}
-                    icon="fa-beer"
-                    color={simulationState.abv > 6.5 ? "text-amber-400" : simulationState.abv >= 4.5 ? "text-green-400" : "text-red-400"}
-                    feedback={getFeedback('contenido alcohólico', analysis)}
+        <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 5, right: 30, left: 15, bottom: 25 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                <XAxis 
+                    dataKey={xKey} 
+                    type="number" 
+                    stroke="#94A3B8" 
+                    fontSize={12} 
+                    domain={['dataMin', 'dataMax']}
+                    label={{ value: xLabel, position: 'insideBottom', fill: '#94A3B8', offset: -15 }} 
                 />
-                <ResultMetric
-                    label="Eficiencia"
-                    value={`${efficiency.toFixed(1)}%`}
-                    icon="fa-tachometer-alt" 
-                    color={efficiency > 85 ? "text-green-400" : efficiency >= 75 ? "text-blue-400" : "text-red-400"}
-                    feedback={getFeedback('eficiencia de conversión', analysis)}
+                <YAxis 
+                    stroke="#94A3B8" 
+                    fontSize={12} 
+                    domain={['auto', 'auto']}
+                    label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: '#94A3B8', offset: 5 }} 
                 />
-                 <ResultMetric
-                    label="Azúcar Residual"
-                    value={`${simulationState.finalSugar.toFixed(1)} g/L`}
-                    icon="fa-cubes" 
-                    color={simulationState.finalSugar < 50 ? "text-blue-400" : "text-red-400"} 
-                    feedback={getFeedback('azúcar residual', analysis)}
+                <Tooltip 
+                    contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #475569' }} 
+                    formatter={(value: number) => value.toFixed(1)}
                 />
-                <ResultMetric
-                    label="Producción de Alcohol"
-                    value={`${simulationState.alcoholProduced.toFixed(0)} g/h`}
-                    icon="fa-flask" 
-                    color="text-lime-400"
-                    feedback="Tasa de producción horaria neta."
-                />
-            </div>
-            
-        </div>
+                <Line type="monotone" dataKey={yKey} name={yLabel.split(' ')[0]} stroke={lineColor} strokeWidth={2} dot={false} />
+            </LineChart>
+        </ResponsiveContainer>
     );
 };
-
-
-// ======================================================================
-// 4. MODAL DE REPORTE DETALLADO (ReportModal)
-// ======================================================================
 
 export const ReportModal: React.FC<ReportDetailsProps> = ({ simulationState, params }) => {
     if (typeof Recharts === 'undefined') return null;
     
+    const [activeTab, setActiveTab] = useState('azucar-eficiencia');
     const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } = Recharts;
 
     const efficiency = ((params.sugar - simulationState.finalSugar) / params.sugar) * 100;
@@ -190,51 +164,122 @@ export const ReportModal: React.FC<ReportDetailsProps> = ({ simulationState, par
     const analysis = getAnalysis(simulationState, params);
     const { chartData } = simulationState;
 
+    const correlationData = chartData.map(d => ({
+        ...d,
+        fermentacion: (d.time / 60) * 100
+    }));
+
     const reactorComparisonTitle = simulationState.reactors.length > 1 
         ? `Comparativa de Azúcar y Alcohol por Reactor (${simulationState.reactors.length} Reactores)`
         : 'Concentración Final en Reactor Único'; 
+
+    const sugarDrop = params.sugar - simulationState.finalSugar;
+    const alcoholIncrease = simulationState.reactors[2]?.alcohol || 0;
+    const yieldRatio = sugarDrop > 0 ? alcoholIncrease / sugarDrop : 0;
     
     const handleExport = () => {
-        const reportContent = `
-======================================
-  EcoBeer - Reporte de Fermentación
-======================================
+        if (typeof jspdf === 'undefined') {
+            alert('La librería para generar PDF no está disponible. Por favor, recargue la página.');
+            return;
+        }
+        const { jsPDF } = jspdf;
+        const doc = new jsPDF();
+        
+        let y = 20;
+        const x = 15;
+        const lineSpacing = 7;
+        const sectionSpacing = 12;
 
-Fecha de Exportación: ${new Date().toLocaleString()}
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(20);
+        doc.text("EcoBeer - Reporte de Fermentación", doc.internal.pageSize.getWidth() / 2, y, { align: 'center' });
+        y += lineSpacing;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(150);
+        doc.text(`Generado el: ${new Date().toLocaleString()}`, doc.internal.pageSize.getWidth() / 2, y, { align: 'center' });
+        y += sectionSpacing * 1.5;
 
---- Parámetros de Entrada ---
-Azúcar Inicial: ${params.sugar} g/L
-Caudal de Mosto: ${params.flow} L/h
-Temperatura: ${params.temperature} °C
-Recirculación: ${params.recirculation} %
+        const drawSection = (title: string, data: {label: string, value: string}[]) => {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            doc.setTextColor(245, 158, 11); // amber-500
+            doc.text(title, x, y);
+            y += lineSpacing;
+            doc.setDrawColor(200);
+            doc.line(x, y, 195, y);
+            y += lineSpacing;
 
---- Resultados Finales ---
-Azúcar Residual: ${simulationState.finalSugar.toFixed(1)} g/L
-Producción Alcohol: ${simulationState.alcoholProduced.toFixed(0)} g/h
-ABV Estimado: ${simulationState.abv.toFixed(1)} %
-Eficiencia Conversión: ${efficiency.toFixed(1)} %
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(11);
+            
+            data.forEach(item => {
+                doc.setTextColor(100);
+                doc.text(item.label, x + 2, y);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(15);
+                doc.text(item.value, 100, y);
+                y += lineSpacing;
+            });
+            y += sectionSpacing / 2;
+        };
+        
+        drawSection("Parámetros de Entrada", [
+            { label: "Azúcar Inicial:", value: `${params.sugar} g/L` },
+            { label: "Caudal de Mosto:", value: `${params.flow} L/h` },
+            { label: "Temperatura:", value: `${params.temperature} °C` },
+            { label: "Recirculación:", value: `${params.recirculation} %` },
+        ]);
 
---- Observaciones y Recomendaciones ---
+        drawSection("Resultados Finales", [
+            { label: "Azúcar Residual:", value: `${simulationState.finalSugar.toFixed(1)} g/L` },
+            { label: "Producción Alcohol:", value: `${simulationState.alcoholProduced.toFixed(0)} g/h` },
+            { label: "ABV Estimado:", value: `${simulationState.abv.toFixed(1)} %` },
+            { label: "Eficiencia Conversión:", value: `${efficiency.toFixed(1)} %` },
+        ]);
+        
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.setTextColor(245, 158, 11);
+        doc.text("Observaciones y Recomendaciones", x, y);
+        y += lineSpacing;
+        doc.setDrawColor(200);
+        doc.line(x, y, 195, y);
+        y += sectionSpacing;
 
-[+] Puntos Fuertes:
-${analysis.good.length > 0 ? analysis.good.map(item => `  - ${item}`).join('\n') : '  - No se destacaron puntos fuertes.'}
+        const drawAnalysisList = (title: string, items: string[], color: [number, number, number]) => {
+            if (y > 270) { doc.addPage(); y = 20; }
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(12);
+            doc.setTextColor(color[0], color[1], color[2]);
+            doc.text(title, x, y);
+            y += lineSpacing;
+            
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            doc.setTextColor(50);
+            
+            const defaultText = title.includes("Fuertes") 
+                ? "No se destacaron puntos fuertes con esta configuración."
+                : "¡Excelente trabajo! No se identificaron áreas claras de mejora.";
 
-[!] Áreas de Mejora:
-${analysis.bad.length > 0 ? analysis.bad.map(item => `  - ${item}`).join('\n') : '  - ¡Excelente trabajo! No se identificaron áreas claras de mejora.'}
-
-
-Nota: Los análisis gráficos (charts) no se incluyen en esta exportación.
-        `;
-
-        const blob = new Blob([reportContent.trim()], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `reporte-fermentacion-ecobeer-${new Date().toISOString().split('T')[0]}.txt`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+            const itemsToRender = items.length > 0 ? items : [defaultText];
+            itemsToRender.forEach(item => {
+                const wrappedText = doc.splitTextToSize(`- ${item}`, 175);
+                 if (y + (wrappedText.length * (lineSpacing - 2)) > 280) {
+                    doc.addPage();
+                    y = 20;
+                }
+                doc.text(wrappedText, x + 5, y);
+                y += wrappedText.length * (lineSpacing - 2) + 2;
+            });
+            y += sectionSpacing / 2;
+        };
+        
+        drawAnalysisList("[+] Puntos Fuertes", analysis.good, [34, 197, 94]); // green-500
+        drawAnalysisList("[!] Áreas de Mejora", analysis.bad, [239, 68, 68]); // red-500
+        
+        doc.save(`reporte-fermentacion-ecobeer-${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     return (
@@ -248,34 +293,40 @@ Nota: Los análisis gráficos (charts) no se incluyen en esta exportación.
                     onClick={handleExport}
                     className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm shadow-md hover:shadow-lg"
                 >
-                    <i className="fas fa-download"></i>
-                    Exportar Reporte
+                    <i className="fas fa-file-pdf"></i>
+                    Exportar PDF
                 </button>
             </div>
             
             <div className="space-y-6 p-4 pt-0">
-                   <div className="grid md:grid-cols-2 gap-6">
+                   <div className="grid md:grid-cols-3 gap-6">
                         <ReportSection title="Parámetros de Entrada" icon="sliders-h">
                             <DataRow label="Azúcar Inicial" value={params.sugar} unit="g/L" />
                             <DataRow label="Caudal de Mosto" value={params.flow} unit="L/h" />
                             <DataRow label="Temperatura" value={params.temperature} unit="°C" />
                             <DataRow label="Recirculación" value={params.recirculation} unit="%" />
                         </ReportSection>
-                        <ReportSection title="Resultados Finales" icon="chart-pie">
+                        <ReportSection title="Resultados Clave" icon="chart-pie">
                             <DataRow label="Azúcar Residual" value={simulationState.finalSugar.toFixed(1)} unit="g/L" />
                             <DataRow label="Producción Alcohol" value={simulationState.alcoholProduced.toFixed(0)} unit="g/h" />
                             <DataRow label="ABV Estimado" value={simulationState.abv.toFixed(1)} unit="%" />
                             <DataRow label="Eficiencia Conversión" value={efficiency.toFixed(1)} unit="%" />
+                        </ReportSection>
+                        <ReportSection title="Análisis Cuantitativo" icon="calculator">
+                            <DataRow label="Disminución de Azúcar" value={sugarDrop.toFixed(1)} unit="g/L" />
+                            <DataRow label="Incremento de Alcohol" value={alcoholIncrease.toFixed(1)} unit="g/L" />
+                            <DataRow label="Rendimiento (Alc/Az)" value={yieldRatio.toFixed(2)} unit="" />
+                            <DataRow label="Proceso Completo" value={simulationState.fermentationComplete ? "Sí" : "No"} />
                         </ReportSection>
                     </div>
 
                     <div>
                           <h3 className="text-lg font-semibold text-amber-400 mt-6 mb-4 flex items-center gap-2 justify-center">
                                 <i className="fas fa-chart-area"></i>
-                                Análisis Gráfico
+                                Análisis Gráfico del Proceso
                             </h3>
-                        <div className="grid md:grid-cols-2 gap-6">
-                            <ChartContainer title="Evolución de Concentraciones a lo largo del Proceso">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <ChartContainer title="Evolución de Concentraciones">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 20 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
@@ -301,13 +352,50 @@ Nota: Los análisis gráficos (charts) no se incluyen en esta exportación.
                                         </BarChart>
                                     </ResponsiveContainer>
                             </ChartContainer>
+                            <div className="md:col-span-2">
+                                <ChartContainer title="Evolución de la Temperatura">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 20 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                                            <XAxis dataKey="time" stroke="#94A3B8" fontSize={12} unit="s" label={{ value: 'Tiempo (s)', position: 'insideBottom', fill: '#94A3B8', offset: -15 }} />
+                                            <YAxis stroke="#94A3B8" fontSize={12} domain={['dataMin - 2', 'dataMax + 2']} unit="°C" label={{ value: '°C', angle: -90, position: 'insideLeft', fill: '#94A3B8' }} />
+                                            <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #475569' }} />
+                                            <Legend wrapperStyle={{fontSize: "12px", paddingTop: "20px"}}/>
+                                            <Line type="monotone" dataKey="temperature" name="Temperatura" stroke="#BE185D" strokeWidth={2} dot={false} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </ChartContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 className="text-lg font-semibold text-amber-400 mt-8 mb-4 flex items-center gap-2 justify-center">
+                            <i className="fas fa-link"></i>
+                            Análisis de Correlación de Variables
+                        </h3>
+                        <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-800">
+                             <div className="flex flex-wrap border-b border-slate-700 mb-4">
+                                <TabButton active={activeTab === 'azucar-eficiencia'} onClick={() => setActiveTab('azucar-eficiencia')}>Azúcar vs Eficiencia</TabButton>
+                                <TabButton active={activeTab === 'eficiencia-alcohol'} onClick={() => setActiveTab('eficiencia-alcohol')}>Eficiencia vs Alcohol</TabButton>
+                                <TabButton active={activeTab === 'alcohol-azucar'} onClick={() => setActiveTab('alcohol-azucar')}>Alcohol vs Azúcar</TabButton>
+                                <TabButton active={activeTab === 'progreso-azucar'} onClick={() => setActiveTab('progreso-azucar')}>Progreso vs Azúcar</TabButton>
+                                <TabButton active={activeTab === 'progreso-eficiencia'} onClick={() => setActiveTab('progreso-eficiencia')}>Progreso vs Eficiencia</TabButton>
+                            </div>
+                            <div className="h-72">
+                                {activeTab === 'azucar-eficiencia' && <CorrelationChart data={correlationData} xKey="sugar" yKey="efficiency" xLabel="Azúcar (g/L)" yLabel="Eficiencia (%)" lineColor="#38BDF8" />}
+                                {activeTab === 'eficiencia-alcohol' && <CorrelationChart data={correlationData} xKey="efficiency" yKey="alcohol" xLabel="Eficiencia (%)" yLabel="Alcohol (g/L)" lineColor="#22C55E" />}
+                                {activeTab === 'alcohol-azucar' && <CorrelationChart data={correlationData} xKey="alcohol" yKey="sugar" xLabel="Alcohol (g/L)" yLabel="Azúcar (g/L)" lineColor="#F59E0B" />}
+                                {activeTab === 'progreso-azucar' && <CorrelationChart data={correlationData} xKey="fermentacion" yKey="sugar" xLabel="Progreso Fermentación (%)" yLabel="Azúcar (g/L)" lineColor="#F59E0B" />}
+                                {activeTab === 'progreso-eficiencia' && <CorrelationChart data={correlationData} xKey="fermentacion" yKey="efficiency" xLabel="Progreso Fermentación (%)" yLabel="Eficiencia (%)" lineColor="#38BDF8" />}
+                            </div>
                         </div>
                     </div>
 
                     <div>
                         <h3 className="text-lg font-semibold text-amber-400 mt-6 mb-4 flex items-center gap-2 justify-center">
                                 <i className="fas fa-microscope"></i>
-                                Observaciones y Recomendaciones
+                                Análisis Cualitativo
                             </h3>
                         <div className="grid md:grid-cols-2 gap-6">
                             <div className="bg-slate-700/50 p-4 rounded-lg border border-green-700/50">
@@ -330,6 +418,20 @@ Nota: Los análisis gráficos (charts) no se incluyen en esta exportación.
                             </div>
                         </div>
                     </div>
+                    
+                    <ReportSection title="Interpretación General del Proceso" icon="info-circle">
+                        <div className="text-slate-300 space-y-2 text-xs italic">
+                           <p>
+                                <strong>Tendencia General:</strong> A medida que la fermentación avanza, es normal observar una disminución del azúcar y un aumento del alcohol. La eficiencia debe ascender de forma constante, reflejando la conversión de azúcar en alcohol.
+                           </p>
+                           <p>
+                                <strong>Estabilidad del Proceso:</strong> Si las curvas en los gráficos son suaves y continuas, sin caídas o mesetas abruptas, indica que el proceso fue estable y la levadura trabajó de forma consistente.
+                           </p>
+                           <p>
+                                <strong>Posibles Problemas:</strong> Si la eficiencia se estanca o deja de subir antes de alcanzar un nivel alto (típicamente >80%), puede ser un indicador de limitación de nutrientes, estrés de la levadura por alta temperatura o una tolerancia alcohólica alcanzada.
+                           </p>
+                        </div>
+                    </ReportSection>
             </div>
         </div>
     );
