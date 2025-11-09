@@ -1,0 +1,5 @@
+{
+  "name": "Copy of EcoBeer Fermentation Simulator",
+  "description": "An interactive educational model of a 3-reactor beer fermentation system with recirculation. Users can adjust process parameters, control valves, and visualize the fermentation process in real-time with detailed charts and results.",
+  "requestFramePermissions": []
+}
